@@ -1,0 +1,3 @@
+/home/triumph/Desktop/future_net/code/CMakeFiles/edit_cache.dir
+/home/triumph/Desktop/future_net/code/CMakeFiles/rebuild_cache.dir
+/home/triumph/Desktop/future_net/code/CMakeFiles/future_net.dir

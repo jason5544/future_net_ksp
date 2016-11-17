@@ -1,0 +1,579 @@
+#include "route.h"
+#include "lib_record.h"
+#include <iostream>
+#include<vector>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+using namespace std;
+
+/*
+1=<Weight value<=20
+weight value is integer
+No loop link
+Multiple link with different weight
+|vertices|<=600,|outer degree|<=8,sparse graph
+|Essential vertices|<=50
+Directed loop graph
+*/
+
+#define MAX_EV (55)
+//50
+
+#define MAX_V (666)
+//600
+bool debug1=true;
+bool debug_write=true;
+int V;
+int Edge;
+int index_node[MAX_V];
+int node_index[MAX_V];
+
+vector<int>G[MAX_V];
+vector<int>rG[MAX_V];
+vector<int>vs;
+bool used[MAX_V];
+int cmp[MAX_V];
+int SCCnumber;
+int EnodeNumber4ithSCC[MAX_V];
+
+int EssentialNode[MAX_EV];
+bool isEssentialNode[MAX_V];
+int EnodeSize;
+
+int Graph[MAX_V][MAX_V];
+int fGraph[MAX_V][MAX_V];
+int existNode[MAX_V];
+
+
+int source,destination;
+bool isfindpath;
+
+void DebugPrint()
+{
+    cout<<"source node:"<<node_index[source]<<"  destination node:"<<node_index[destination]<<endl;
+    cout<<"essential node"<<EnodeSize<<":";
+    for(int i=0; i<EnodeSize; i++)
+    {
+        cout<<node_index[EssentialNode[i]]<<" ";
+    }
+    cout<<endl;
+    cout<<"node size:"<<V<<endl;
+    cout<<"edge size:"<<Edge<<endl;
+
+    cout<<"topology:"<<endl;
+     for(int i=0; i<V; i++)
+    {
+         cout<<node_index[i]<<" ";
+    }
+    cout<<endl;
+    for(int i=0; i<V; i++)
+    {
+        for(int j=0; j<V; j++)
+        {
+            cout<<Graph[i][j]<<" ";
+        }
+        cout<<endl;
+    }
+
+    cout<<"SCC"<<SCCnumber<<"   :";
+    for(int i=0; i<V; i++)
+    {
+        cout<<cmp[i]<<" ";
+    }
+    cout<<endl;
+
+}
+void scaledowngragh()
+{
+    bool judgeindegree,judgeoutdegree;
+    judgeindegree=judgeoutdegree=false;
+    for(int k=2; k<V; k++)
+    {
+        for(int i=0; i<V; i++)
+        {
+            if(Graph[k][i]>0)
+                judgeoutdegree=true;
+        }
+        for(int j=0; j<V; j++)
+        {
+            if(Graph[j][k]>0)
+                judgeindegree=true;
+        }
+        if((judgeindegree==false)||(judgeoutdegree==false))
+        {
+            existNode[k]=0;
+
+        }
+    }
+}
+bool judgegraph()
+{
+    bool judgeindegree,judgeoutdegree;
+    judgeindegree=judgeoutdegree=false;
+    for(int j=0; j<V; j++)
+    {
+        if(Graph[source][j]>0)
+            judgeoutdegree=true;
+    }
+    if(judgeoutdegree==false)
+        return false;
+    for(int i=0; i<V; i++)
+    {
+        if(Graph[i][destination]>0)
+            judgeindegree=true;
+    }
+    if(judgeindegree==false)
+        return false;
+    for(int k=0; k<EnodeSize; k++)
+    {
+        if(0==existNode[EssentialNode[k]])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+void initcleardata()
+{
+    V=0;
+    Edge=0;
+    memset(index_node,-1,sizeof(index_node));
+    memset(node_index,-1,sizeof(node_index));
+    memset(Graph,0,sizeof(Graph));
+    memset(fGraph,0,sizeof(fGraph));
+    memset(existNode,0,sizeof(existNode));
+    memset(isEssentialNode,0,sizeof(isEssentialNode));
+    return ;
+
+}
+void add_edge(int from,int to)
+{
+    G[from].push_back(to);
+    rG[to].push_back(from);
+}
+
+void convertMatrixtoList()
+{
+    for(int i=0; i<V; i++)
+    {
+        if(existNode[i]>0)
+        {
+            G[i].clear();
+        }
+    }
+    for(int i=0; i<V; i++)
+    {
+        if(existNode[i]>0)
+        {
+            for(int j=0; j<V; j++)
+            {
+                if(existNode[j]>0)
+                {
+                    if(Graph[i][j]>0)
+                    {
+                        add_edge(i,j);
+                    }
+                }
+            }
+        }
+    }
+}
+int traverseallesentialnode;
+bool mfirstdfs;
+bool succeedtodestination;
+void ccdfs(int v)
+{
+    if(mfirstdfs)
+    {
+        if(isEssentialNode[v])
+            traverseallesentialnode++;
+        if(v==destination)
+        {
+            succeedtodestination=true;
+        }
+    }
+    used[v]=true;
+    for(int i=0; i<G[v].size(); i++)
+    {
+        if(!used[G[v][i]])
+            ccdfs(G[v][i]);
+    }
+    vs.push_back(v);
+}
+void ccrdfs(int v,int k)
+{
+    used[v]=true;
+    cmp[v]=k;
+    for(int i=0; i<rG[v].size(); i++)
+    {
+        if(!used[rG[v][i]]) ccrdfs(rG[v][i],k);
+    }
+}
+int scc()
+{
+    mfirstdfs=true;
+    succeedtodestination=false;
+    traverseallesentialnode=0;
+    memset(used,0,sizeof(used));
+    vs.clear();
+    for(int v=0; v<V; v++)
+    {
+        //if(existNode[v]>0)
+        if(!used[v])ccdfs(v);
+        mfirstdfs=false;
+    }
+    memset(used,0,sizeof(used));
+    int k=0;
+    for(int i=vs.size()-1; i>=0; i--)
+    {
+        // if(existNode[vs[i]]>0)
+        if(!used[vs[i]])ccrdfs(vs[i],k++);
+    }
+    memset(EnodeNumber4ithSCC,0,sizeof(EnodeNumber4ithSCC));
+    for(int i=0; i<EnodeSize; i++)
+    {
+        EnodeNumber4ithSCC[cmp[EssentialNode[i]]]++;
+    }
+    return k;
+}
+int currentincludeessentialnode;
+vector<int>path;
+bool usednode[MAX_V];
+bool succeedfindpath;
+void dfs(int s,int n,int enodenumb)
+{
+    if(s==destination&&(n==EnodeSize))
+    {
+        succeedfindpath=true;
+    }
+    usednode[s]=true;
+    for(int i=0; i<G[s].size(); i++)
+    {
+        if(false==succeedfindpath)
+        {
+            if(!usednode[G[s][i]])
+            {
+                if(cmp[s]==cmp[G[s][i]])
+                {
+                    if(isEssentialNode[G[s][i]])
+                    {
+                        dfs(G[s][i],n+1,enodenumb+1);
+                    }
+                    else
+                        dfs(G[s][i],n,enodenumb);
+                }
+                else
+                {
+                    if(EnodeNumber4ithSCC[cmp[s]]>=enodenumb)
+                    {
+                        if(isEssentialNode[G[s][i]])
+                        {
+                            dfs(G[s][i],n+1,1);
+                        }
+                        else
+                            dfs(G[s][i],n,0);
+                    }
+                }
+            }
+        }
+    }
+    usednode[s]=false;
+    if(succeedfindpath==true)
+    {
+        path.push_back(s);
+    }
+    return ;
+}
+void wirtedatatofile()
+{
+    int pathcostsum=0;
+    FILE *fp;
+    fp=fopen("sample_result1.csv","w+");
+    if(NULL==fp)
+    {
+        cout<<"open file failure"<<endl;
+        return ;
+    }
+    if(isfindpath==false)
+    {
+        if(debug_write)
+            cout<<"NA\n";//write to the csv file;
+        fprintf(fp,"%s","NA\n");
+    }
+    else
+    {
+        for(int i=path.size()-1; i>=1; i--)
+        {
+            if(i==(path.size()-1))
+            {
+                if(debug_write)
+                    cout<<"edge index:"<<fGraph[path[i]][path[i-1]];
+                fprintf(fp,"%d",fGraph[path[i]][path[i-1]]);
+                pathcostsum+=Graph[path[i]][path[i-1]];
+            }
+            else
+            {
+                if(debug_write)
+                    cout<<"|"<<fGraph[path[i]][path[i-1]];
+                fprintf(fp,"%c",'|');
+                fprintf(fp,"%d",fGraph[path[i]][path[i-1]]);
+                pathcostsum+=Graph[path[i]][path[i-1]];
+            }
+        }
+        if(debug_write)
+        {
+            cout<<endl;
+            for(int i=path.size()-1; i>=0; i--)
+            {
+
+                if(i==(path.size()-1))
+                {
+                    cout<<"node index:"<<node_index[path[i]];
+                }
+                else
+                {
+                    cout<<"|"<<node_index[path[i]];
+                }
+            }
+            cout<<endl<<"pathcostsum:"<<pathcostsum<<endl;
+        }
+    }
+    fclose(fp);
+}
+
+void search_route(char *topo[5000], int edge_num, char *demand)
+{
+    unsigned short result[MAX_V];
+    int demandStrLength = strlen(demand);
+    int mInput;
+    int ithtopolebgth;
+    int mFlag,inEdge,outEdge,mWeight;
+    EnodeSize=0;
+
+    initcleardata();
+    isfindpath=true;
+    //isfindpath=loadgraph();
+    int demandi=0;
+    for(mInput=0; demandi<demandStrLength; demandi++)
+    {
+        if((demand[demandi]==',')||(demand[demandi]=='|'))
+        {
+            demandi++;
+            break;
+        }
+        mInput=mInput*10+(demand[demandi]-'0');
+    }
+    source = mInput;
+
+    for(mInput=0; demandi<demandStrLength; demandi++)
+    {
+        if((demand[demandi]==',')||(demand[demandi]=='|'))
+        {
+            demandi++;
+            break;
+        }
+        mInput=mInput*10+(demand[demandi]-'0');
+    }
+    destination = mInput;
+
+    index_node[source]=V;
+    node_index[V]=source;
+    source=V;
+    existNode[V]=1;
+    V++;
+    index_node[destination]=V;
+    node_index[V]=destination;
+    destination=V;
+    existNode[V]=1;
+    V++;
+
+    for(mInput=0; demandi<=demandStrLength; demandi++)
+    {
+        if((demand[demandi]==',')||(demand[demandi]=='|')||(demandi==(demandStrLength)))
+        {
+
+            index_node[mInput]=V;
+            node_index[V]=mInput;
+            EssentialNode[EnodeSize]=V;
+            isEssentialNode[V]=true;
+            existNode[V]=1;
+            V++;
+            EnodeSize++;
+            mInput=0;
+            if(demandi==demandStrLength)
+            {
+                break;
+            }
+
+
+        }
+        else
+        {
+            mInput=mInput*10+(demand[demandi]-'0');
+        }
+    }
+
+    for(int i=0; i<edge_num; i++)
+    {
+        ithtopolebgth=strlen(topo[i]);
+        int j=0;
+        mInput=0;
+        for(; j<ithtopolebgth; j++)
+        {
+            if(topo[i][j]==',')
+            {
+                j++;
+                break;
+            }
+            mInput=mInput*10+(topo[i][j]-'0');
+        }
+        mFlag=mInput;
+
+        mInput=0;
+        for(; j<ithtopolebgth; j++)
+        {
+            if(topo[i][j]==',')
+            {
+                j++;
+                break;
+            }
+            mInput=mInput*10+(topo[i][j]-'0');
+        }
+        if(index_node[mInput]==-1)
+        {
+            index_node[mInput]=V;
+            node_index[V]=mInput;
+            existNode[V]=1;
+            V++;
+        }
+        inEdge=index_node[mInput];
+
+        mInput=0;
+        for(; j<ithtopolebgth; j++)
+        {
+            if(topo[i][j]==',')
+            {
+                j++;
+                break;
+            }
+            mInput=mInput*10+(topo[i][j]-'0');
+        }
+
+        if(index_node[mInput]==-1)
+        {
+            index_node[mInput]=V;
+            node_index[V]=mInput;
+            existNode[V]=1;
+            V++;
+
+        }
+        outEdge=index_node[mInput];
+
+        mInput=0;
+        for(; j<ithtopolebgth; j++)
+        {
+            if(topo[i][j]==',')
+            {
+                j++;
+                break;
+            }
+            mInput=mInput*10+(topo[i][j]-'0');
+        }
+        mWeight=mInput;
+
+        if(debug1)
+            cout<<node_index[inEdge]<<"  "<<node_index[outEdge]<<endl;
+        if((inEdge!=destination)&&(outEdge!=source)&&(inEdge!=outEdge))
+        {
+
+            if(Graph[inEdge][outEdge]==0)
+            {
+                Graph[inEdge][outEdge]=mWeight;
+                fGraph[inEdge][outEdge]=mFlag;
+
+            }
+            else
+            {
+                if(Graph[inEdge][outEdge]>mWeight)
+                {
+                    Graph[inEdge][outEdge]=mWeight;
+                    fGraph[inEdge][outEdge]=mFlag;
+                }
+            }
+            Edge++;
+        }
+    }
+    scaledowngragh();
+    if(isfindpath==true)
+        isfindpath=judgegraph();
+    convertMatrixtoList();
+    SCCnumber=scc();
+    if(debug1)
+        DebugPrint();
+    if(succeedtodestination==false||(traverseallesentialnode!=EnodeSize))
+        isfindpath=false;
+
+    if(isfindpath==true)
+    {
+        currentincludeessentialnode=0;
+        succeedfindpath=false;
+        path.clear();
+        memset(usednode,0,sizeof(usednode));
+        dfs(source,0,0);
+        isfindpath=succeedfindpath;
+    }
+
+
+    int j=0;
+    for(int i=path.size()-1; i>=1; i--,j++)
+    {
+        if(i==1)
+            cout<<"succeed"<<endl;
+        result[j]=fGraph[path[i]][path[i-1]];
+    }
+    for (int i = 0; i < j; i++)
+        record_result(result[i]);
+}
+
+/*
+int main()
+{
+    initcleardata();
+    //search_route(char *topo[5000], int edge_num, char *demand)
+    char demand[3000];
+    char topo[5000][20];
+
+    int edge_num=0;
+    int judgefile;
+    FILE *fp;
+    fp=fopen("demand.csv","r");
+    fscanf(fp,"%s",demand);
+    if(debug1)
+            cout<<"demand:"<<demand<<endl;
+    fclose(fp);
+    fp=fopen("topo.csv","r");
+    judgefile=fscanf(fp,"%s",topo[edge_num]);
+    while(judgefile!=-1)
+    {
+        if(debug1)
+            cout<<"ithtopostr:"<<topo[edge_num]<<endl;
+        edge_num++;
+        judgefile=fscanf(fp,"%s",topo[edge_num]);
+
+    }
+    fclose(fp);
+    char *intopo[5000];
+    for(int i=0; i<edge_num; i++)
+    {
+        intopo[i]=topo[i];
+    }
+    search_route(intopo,edge_num,demand);
+
+}
+*/
+
+
+
+
+
